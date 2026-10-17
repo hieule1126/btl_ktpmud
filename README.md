@@ -113,46 +113,73 @@ docker compose up -d
 
 ## Cách chỉnh sửa và gửi thay đổi lên GitHub
 
-Mỗi thành viên tạo nhánh riêng cho phần việc của mình, rồi gửi pull request để nhóm xem xét trước khi nhập vào `main`.
+Mỗi thành viên có một nhánh riêng đã tạo sẵn. Hãy làm việc trên nhánh được ghi cạnh tên mình; không commit trực tiếp lên `main`.
 
-1. Cập nhật `main` trước khi bắt đầu:
+| Thành viên | Nhánh |
+|---|---|
+| Phạm Minh Đức | `dev/pham-minh-duc` |
+| Tô Thành Trung | `dev/to-thanh-trung` |
+| Lưu Văn Thăng | `dev/luu-van-thang` |
+| Nguyễn Tất Tuấn Kiệt | `dev/nguyen-tat-tuan-kiet` |
+| Lê Đình Hiếu | `dev/le-dinh-hieu` |
 
-   ```powershell
-   git switch main
-   git pull origin main
-   ```
+### Lần đầu làm việc trên máy cá nhân
 
-2. Tạo nhánh mới, thay tên nhánh mẫu bằng nội dung công việc của bạn:
+Sau khi clone dự án và vào thư mục `btl_ktpmud`, thành viên thay tên nhánh trong lệnh dưới đây bằng nhánh của mình:
 
-   ```powershell
-   git switch -c feature/ten-chuc-nang
-   ```
+```powershell
+git fetch origin
+git switch --track origin/dev/ten-nhanh-cua-ban
+```
 
-3. Chỉnh sửa các tệp bằng VS Code. Trước khi gửi, xem các tệp đã đổi:
+Ví dụ, Phạm Minh Đức chạy:
 
-   ```powershell
-   git status
-   ```
+```powershell
+git fetch origin
+git switch --track origin/dev/pham-minh-duc
+```
 
-4. Lưu thay đổi thành commit:
+### Những lần làm việc tiếp theo
 
-   ```powershell
-   git add .
-   git commit -m "Mo ta ngan gon thay doi"
-   ```
+Trước khi sửa code, chuyển về nhánh của mình và lấy các thay đổi mới nhất của nhánh đó:
 
-5. Đẩy nhánh lên GitHub:
+```powershell
+git switch dev/ten-nhanh-cua-ban
+git pull origin dev/ten-nhanh-cua-ban
+```
 
-   ```powershell
-   git push -u origin feature/ten-chuc-nang
-   ```
+Chỉnh sửa tệp bằng VS Code, sau đó kiểm tra thay đổi và lưu thành commit:
 
-6. Trên GitHub, tạo pull request từ nhánh của bạn vào `main`. Sau khi nhóm xem và merge, cập nhật máy của bạn:
+```powershell
+git status
+git add .
+git commit -m "Mo ta ngan gon thay doi"
+```
 
-   ```powershell
-   git switch main
-   git pull origin main
-   ```
+Đẩy commit lên đúng nhánh của mình:
+
+```powershell
+git push origin dev/ten-nhanh-cua-ban
+```
+
+Ví dụ, Phạm Minh Đức dùng:
+
+```powershell
+git push origin dev/pham-minh-duc
+```
+
+### Gửi thay đổi vào main
+
+Trên GitHub, tạo **Pull Request** từ nhánh riêng của bạn vào `main`. Nhóm kiểm tra rồi mới merge Pull Request. Sau khi merge, cập nhật `main` trên máy:
+
+```powershell
+git switch main
+git pull origin main
+```
+
+Khi bắt đầu phần việc mới, chuyển lại nhánh riêng và lấy các commit mới nhất của nhánh đó. Nếu GitHub báo xung đột hoặc cần cập nhật nhánh với `main`, hãy nhờ nhóm phối hợp xử lý trước khi merge Pull Request.
+
+Mỗi thành viên cần được cấp quyền ghi (**Write**) vào repository để đẩy nhánh lên GitHub.
 
 Không đưa `server/.env`, `node_modules` hoặc dữ liệu database cá nhân lên GitHub. Tệp `.env.example` là mẫu cấu hình dùng chung; mỗi người tạo `server/.env` riêng trên máy mình.
 
