@@ -77,14 +77,158 @@ function Login({ onLogin }) {
 }
 
 function Dashboard({ data, pending, setPage }) {
-  const cards = [{ label: "Sản phẩm", value: data?.summary.product_count, icon: "◫", color: "blue" }, { label: "Lô hàng đang có", value: data?.summary.batch_count, icon: "▤", color: "orange" }, { label: "Tổng đơn vị tồn", value: data?.summary.item_count, icon: "▦", color: "green" }, { label: "Phiếu chờ duyệt", value: data?.summary.pending_count, icon: "✓", color: "purple" }];
-  return <><section className="hero"><div><span className="hero-badge">VẬN HÀNH ỔN ĐỊNH</span><h2>Kho của bạn đang được<br/>kiểm soát tốt.</h2><p>Theo dõi tập trung, xử lý chính xác và ra quyết định nhanh hơn mỗi ngày.</p><button onClick={() => setPage("approvals")}>Xem phiếu cần xử lý <span>→</span></button></div><div className="hero-shape"><div className="box one"/><div className="box two"/><div className="box three"/><span>▦</span></div></section><section className="stats">{cards.map(card => <article className="stat-card" key={card.label}><div className={`stat-icon ${card.color}`}>{card.icon}</div><p>{card.label}</p><strong>{formatNumber(card.value)}</strong><small>{card.label === "Phiếu chờ duyệt" ? "Cần xử lý" : "Được cập nhật liên tục"}</small></article>)}</section><section className="split-section"><div className="panel"><div className="panel-head"><div><h3>Phiếu cần xử lý</h3><p>Các chứng từ mới nhất đang chờ quyết định</p></div><button className="text-button" onClick={() => setPage("approvals")}>Xem tất cả</button></div>{pending.length ? <div className="activity-list">{pending.slice(0, 4).map(item => <div className="activity" key={`${item.kind}-${item.id}`}><span className={`activity-icon ${item.kind}`}>{item.kind === "receipts" ? "↓" : "↑"}</span><div><strong>{item.code}</strong><small>Phiếu {item.type.toLowerCase()} · {formatDate(item.created_at)}</small></div><span className="status pending">Chờ duyệt</span></div>)}</div> : <Empty text="Không có phiếu nào đang chờ duyệt." />}</div><div className="panel guide"><span>✦</span><h3>Xuất kho thông minh</h3><p>FEFO đang là chiến lược mặc định, giúp ưu tiên lô hàng gần hết hạn trước.</p><div><b>FEFO</b><b>FIFO</b><b>LIFO</b></div></div></section></>;
+  const cards = [
+    { label: "Sản phẩm", value: data?.summary.product_count, icon: "◫", color: "blue", trend: "+4% tháng này" }, 
+    { label: "Lô hàng đang có", value: data?.summary.batch_count, icon: "▤", color: "orange", trend: "Ổn định" }, 
+    { label: "Tổng đơn vị tồn", value: data?.summary.item_count, icon: "▦", color: "green", trend: "+12% so với tuần trước" }, 
+    { label: "Phiếu chờ duyệt", value: data?.summary.pending_count, icon: "✓", color: "purple", trend: "Cần xử lý ngay" }
+  ];
+
+  return (
+    <>
+      <section className="hero">
+        <div>
+          <span className="hero-badge">VẬN HÀNH ỔN ĐỊNH</span>
+          <h2>Kho của bạn đang được<br/>kiểm soát tốt.</h2>
+          <p>Theo dõi tập trung, xử lý chính xác và ra quyết định nhanh hơn mỗi ngày.</p>
+          <button onClick={() => setPage("approvals")}>Xem phiếu cần xử lý <span>→</span></button>
+        </div>
+        <div className="hero-shape">
+          <div className="box one"/>
+          <div className="box two"/>
+          <div className="box three"/>
+          <span>▦</span>
+        </div>
+      </section>
+
+      <section className="stats">
+        {cards.map(card => (
+          <article className="stat-card" key={card.label}>
+            <div className={`stat-icon ${card.color}`}>{card.icon}</div>
+            <p>{card.label}</p>
+            <strong>{formatNumber(card.value)}</strong>
+            <small className="stat-trend">{card.trend}</small>
+          </article>
+        ))}
+      </section>
+
+      <section className="split-section">
+        <div className="panel">
+          <div className="panel-head">
+            <div>
+              <h3>Phiếu cần xử lý</h3>
+              <p>Các chứng từ mới nhất đang chờ quyết định</p>
+            </div>
+            <button className="text-button" onClick={() => setPage("approvals")}>Xem tất cả</button>
+          </div>
+          {pending.length ? (
+            <div className="activity-list">
+              {pending.slice(0, 4).map(item => (
+                <div className="activity" key={`${item.kind}-${item.id}`}>
+                  <span className={`activity-icon ${item.kind}`}>{item.kind === "receipts" ? "↓" : "↑"}</span>
+                  <div>
+                    <strong>{item.code}</strong>
+                    <small>Phiếu {item.type.toLowerCase()} · {formatDate(item.created_at)}</small>
+                  </div>
+                  <span className="status pending">Chờ duyệt</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Empty text="Không có phiếu nào đang chờ duyệt." />
+          )}
+        </div>
+
+        <div className="panel guide">
+          <span>✦</span>
+          <h3>Chiến lược xuất kho</h3>
+          <p>Hệ thống đang tự động tối ưu hóa việc xuất hàng theo phương thức:</p>
+          <div className="strategy-tags">
+            <b>FEFO (Mặc định)</b>
+            <span style={{ fontSize: "13px", opacity: 0.8, display: "block", marginTop: "8px" }}>
+              Ưu tiên xuất trước các lô hàng có hạn sử dụng gần nhất để giảm thiểu hàng tồn quá hạn.
+            </span>
+          </div>
+        </div>
+      </section>
+    </>
+  );
 }
 
 function Products({ products, canEdit, reload, notify, setError }) {
-  const [showForm, setShowForm] = useState(false); const [form, setForm] = useState({ sku: "", name: "", unit: "cái", minimumStock: 0 });
-  const submit = async e => { e.preventDefault(); try { const result = await api("/catalog/products", { method: "POST", body: JSON.stringify(form) }); notify(result.message); setShowForm(false); setForm({ sku: "", name: "", unit: "cái", minimumStock: 0 }); await reload(); } catch (err) { setError(err.message); } };
-  return <section className="panel table-panel"><div className="panel-head"><div><h3>Danh mục sản phẩm</h3><p>{products.length} sản phẩm đang được theo dõi</p></div>{canEdit && <button className="primary" onClick={() => setShowForm(true)}>+ Thêm sản phẩm</button>}</div>{showForm && <form className="inline-form" onSubmit={submit}><input placeholder="Mã sản phẩm" value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })} required/><input placeholder="Tên sản phẩm" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required/><input placeholder="Đơn vị" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })}/><input type="number" min="0" placeholder="Tồn tối thiểu" value={form.minimumStock} onChange={e => setForm({ ...form, minimumStock: e.target.value })}/><button className="primary">Lưu</button><button type="button" className="secondary" onClick={() => setShowForm(false)}>Hủy</button></form>}<div className="table-scroll"><table><thead><tr><th>Mã SP</th><th>Tên sản phẩm</th><th>Đơn vị</th><th>Tồn hiện có</th><th>Mức tối thiểu</th><th>Trạng thái</th></tr></thead><tbody>{products.map(p => <tr key={p.id}><td><code>{p.sku}</code></td><td><strong>{p.name}</strong></td><td>{p.unit}</td><td className="strong-number">{formatNumber(p.current_stock)}</td><td>{formatNumber(p.minimum_stock)}</td><td><span className="status approved">Đang quản lý</span></td></tr>)}</tbody></table></div></section>;
+  const [showForm, setShowForm] = useState(false); 
+  const [form, setForm] = useState({ sku: "", name: "", unit: "cái", minimumStock: 0 });
+
+  const submit = async e => { 
+    e.preventDefault(); 
+    try { 
+      const result = await api("/catalog/products", { method: "POST", body: JSON.stringify(form) }); 
+      notify(result.message); 
+      setShowForm(false); 
+      setForm({ sku: "", name: "", unit: "cái", minimumStock: 0 }); 
+      await reload(); 
+    } catch (err) { 
+      setError(err.message); 
+    } 
+  };
+
+  return (
+    <section className="panel table-panel">
+      <div className="panel-head">
+        <div>
+          <h3>Danh mục sản phẩm</h3>
+          <p>{products.length} sản phẩm đang được theo dõi</p>
+        </div>
+        {canEdit && <button className="primary" onClick={() => setShowForm(true)}>+ Thêm sản phẩm</button>}
+      </div>
+
+      {showForm && (
+        <form className="inline-form" onSubmit={submit}>
+          <input placeholder="Mã sản phẩm" value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })} required/>
+          <input placeholder="Tên sản phẩm" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required/>
+          <input placeholder="Đơn vị" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })}/>
+          <input type="number" min="0" placeholder="Tồn tối thiểu" value={form.minimumStock} onChange={e => setForm({ ...form, minimumStock: e.target.value })}/>
+          <button className="primary">Lưu</button>
+          <button type="button" className="secondary" onClick={() => setShowForm(false)}>Hủy</button>
+        </form>
+      )}
+
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Mã SP</th>
+              <th>Tên sản phẩm</th>
+              <th>Đơn vị</th>
+              <th>Tồn hiện có</th>
+              <th>Mức tối thiểu</th>
+              <th>Trạng thái</th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map(p => {
+              // Tự động kiểm tra nếu tồn kho <= mức tối thiểu thì báo "Sắp hết hàng"
+              const isLow = Number(p.current_stock) <= Number(p.minimum_stock);
+              return (
+                <tr key={p.id}>
+                  <td><code>{p.sku}</code></td>
+                  <td><strong>{p.name}</strong></td>
+                  <td>{p.unit}</td>
+                  <td className="strong-number">{formatNumber(p.current_stock)}</td>
+                  <td>{formatNumber(p.minimum_stock)}</td>
+                  <td>
+                    <span className={`status ${isLow ? "warning" : "approved"}`}>
+                      {isLow ? "Sắp hết hàng" : "Đang quản lý"}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 function Batches({ batches }) { return <section className="panel table-panel"><div className="panel-head"><div><h3>Tất cả lô hàng</h3><p>Danh sách được sắp theo hạn sử dụng gần nhất</p></div><span className="status approved">FEFO sẵn sàng</span></div><div className="table-scroll"><table><thead><tr><th>Mã lô</th><th>Sản phẩm</th><th>Vị trí</th><th>Hạn sử dụng</th><th>Ngày nhập</th><th>Số lượng</th></tr></thead><tbody>{batches.map(b => <tr key={b.id}><td><code>{b.batch_code}</code></td><td><strong>{b.product_name}</strong><small className="inline-small">{b.sku}</small></td><td><span className="location">⌘ {b.location}</span></td><td>{formatDate(b.expiry_date)}</td><td>{formatDate(b.received_at)}</td><td className="strong-number">{formatNumber(b.quantity)} {b.unit}</td></tr>)}</tbody></table></div></section>; }
