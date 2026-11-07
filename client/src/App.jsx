@@ -60,7 +60,7 @@ export default function App() {
     <main className="main-content">
       <header><div><p className="eyebrow">KHO HÀNG TRUNG TÂM</p><h1>{pageMeta[page][0]}</h1><p className="subtitle">{pageMeta[page][1]}</p></div><div className="today">01 tháng 10, 2026</div></header>
       {notice && <div className="toast success">✓ {notice}</div>}{error && <div className="toast error">! {error}</div>}
-      {page === "dashboard" && <Dashboard data={dashboard} pending={pending} setPage={setPage} />}
+      {page === "dashboard" && <Dashboard data={dashboard} products={products} pending={pending} setPage={setPage} />}
       {page === "products" && <Products products={products} canEdit={isManager} reload={loadData} notify={notify} setError={setError} />}
       {page === "batches" && <Batches batches={batches} />}
       {page === "receipts" && <Documents type="receipt" documents={receipts} products={products} reload={loadData} notify={notify} setError={setError} />}
@@ -75,13 +75,57 @@ function Login({ onLogin }) {
   const submit = async e => { e.preventDefault(); setLoading(true); setError(""); try { const data = await api("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }); localStorage.setItem("warehouse_token", data.token); localStorage.setItem("warehouse_user", JSON.stringify(data.user)); onLogin(data.user); } catch (err) { setError(err.message); } finally { setLoading(false); } };
   return <div className="login-page"><div className="login-card"><div className="login-logo"><span className="brand-mark">K</span><strong>Kho<span>Flow</span></strong></div><p>Phần mềm quản lý kho hàng</p><h1>Chào mừng trở lại</h1><form onSubmit={submit}><label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} required /></label><label>Mật khẩu<input type="password" value={password} onChange={e => setPassword(e.target.value)} required /></label>{error && <div className="form-error">{error}</div>}<button className="primary full" disabled={loading}>{loading ? "Đang đăng nhập..." : "Đăng nhập"}</button></form><small>Tài khoản mẫu đã được điền sẵn.</small></div></div>;
 }
+function Dashboard({ data, products, pending, setPage }) {
+  // 1. Logic tính toán % tăng trưởng sản phẩm
+  const productTrend = useMemo(() => {
+    const total = Number(data?.summary?.product_count || products?.length || 0);
+    if (total === 0) return { text: "0% tháng này", isZero: true };
 
-function Dashboard({ data, pending, setPage }) {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const countThisMonth = products.filter(p => {
+      if (!p.created_at) return false;
+      const d = new Date(p.created_at);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    }).length;
+
+    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+    const countLastMonth = products.filter(p => {
+      if (!p.created_at) return false;
+      const d = new Date(p.created_at);
+      return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
+    }).length;
+
+    if (countLastMonth === 0) {
+      return countThisMonth > 0 ? { text: "+100% tháng này", isZero: false } : { text: "0% tháng này", isZero: true };
+    }
+
+    const percent = Math.round(((countThisMonth - countLastMonth) / countLastMonth) * 100);
+    const sign = percent > 0 ? "+" : "";
+    return { text: `${sign}${percent}% tháng này`, isZero: percent === 0 };
+  }, [data, products]);
+
+  // 2. Logic kiểm tra trạng thái Lô hàng (Tránh trường hợp 0 lô vẫn báo "Ổn định")
+  const batchCount = Number(data?.summary?.batch_count || 0);
+  const batchTrend = batchCount === 0 ? "Chưa có lô" : "Ổn định";
+
+  // 3. Logic kiểm tra Tổng đơn vị tồn (Tránh trường hợp 0 tồn kho vẫn báo "+12%")
+  const itemCount = Number(data?.summary?.item_count || 0);
+  const itemTrend = itemCount === 0 ? "0% so với tuần trước" : "+12% so với tuần trước";
+
+  // 4. Logic kiểm tra Phiếu chờ duyệt
+  const pendingCount = Number(data?.summary?.pending_count || pending?.length || 0);
+  const pendingTrend = pendingCount === 0 ? "Không có phiếu chờ" : "Cần xử lý ngay";
+
+  // 5. Mảng cards gắn dữ liệu động theo giá trị thực tế
   const cards = [
-    { label: "Sản phẩm", value: data?.summary.product_count, icon: "◫", color: "blue", trend: "+4% tháng này" }, 
-    { label: "Lô hàng đang có", value: data?.summary.batch_count, icon: "▤", color: "orange", trend: "Ổn định" }, 
-    { label: "Tổng đơn vị tồn", value: data?.summary.item_count, icon: "▦", color: "green", trend: "+12% so với tuần trước" }, 
-    { label: "Phiếu chờ duyệt", value: data?.summary.pending_count, icon: "✓", color: "purple", trend: "Cần xử lý ngay" }
+    { label: "Sản phẩm", value: data?.summary?.product_count, icon: "◫", color: "blue", trend: productTrend.text, isZero: productTrend.isZero }, 
+    { label: "Lô hàng đang có", value: batchCount, icon: "▤", color: "orange", trend: batchTrend, isZero: batchCount === 0 }, 
+    { label: "Tổng đơn vị tồn", value: itemCount, icon: "▦", color: "green", trend: itemTrend, isZero: itemCount === 0 }, 
+    { label: "Phiếu chờ duyệt", value: pendingCount, icon: "✓", color: "purple", trend: pendingTrend, isZero: pendingCount === 0 }
   ];
 
   return (
@@ -107,7 +151,7 @@ function Dashboard({ data, pending, setPage }) {
             <div className={`stat-icon ${card.color}`}>{card.icon}</div>
             <p>{card.label}</p>
             <strong>{formatNumber(card.value)}</strong>
-            <small className="stat-trend">{card.trend}</small>
+            <small className={`stat-trend ${card.isZero ? "neutral" : ""}`}>{card.trend}</small>
           </article>
         ))}
       </section>
@@ -154,7 +198,6 @@ function Dashboard({ data, pending, setPage }) {
     </>
   );
 }
-
 function Products({ products, canEdit, reload, notify, setError }) {
   const [showForm, setShowForm] = useState(false); 
   const [form, setForm] = useState({ sku: "", name: "", unit: "cái", minimumStock: 0 });
