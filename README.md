@@ -1,6 +1,6 @@
 # Hệ thống quản lý kho hàng
 
-Ứng dụng web hỗ trợ quản lý sản phẩm và lô hàng, lập phiếu nhập/xuất, phân quyền nhân viên và quản lý kho, duyệt phiếu và xuất hàng theo FEFO, FIFO hoặc LIFO. Dự án được xây dựng bằng React, Node.js/Express và MySQL.
+Ứng dụng web hỗ trợ quản lý sản phẩm và lô hàng, lập phiếu nhập/xuất nhiều dòng, phân quyền nhân viên và quản lý kho, duyệt phiếu và xuất hàng theo FEFO/FIFO/LIFO. Quản lý xem chi tiết trước khi duyệt, ghi lý do từ chối hoặc điều chỉnh lô. Dự án được xây dựng bằng React, Node.js/Express và MySQL.
 
 ## Cách nhóm chạy dự án
 
@@ -74,6 +74,16 @@ pnpm dev
 ```
 
 Backend chạy tại `http://localhost:3001`.
+
+### Cập nhật database đã có dữ liệu
+
+Trước khi chạy backend phiên bản này, từ thư mục `server`, chạy:
+
+```powershell
+pnpm migrate
+```
+
+Lệnh bổ sung bảng lịch sử điều chỉnh lô, các cột chống tạo trùng và lý do từ chối, đồng thời hỗ trợ đủ FEFO/FIFO/LIFO. Lệnh giữ nguyên dữ liệu và chính sách của phiếu hiện có, có thể chạy lại an toàn. Phiếu từng được phiên bản cũ chuyển từ LIFO sang FIFO sẽ giữ FIFO. Database mới dùng `schema.sql` đã có đầy đủ cấu trúc, không cần khởi tạo lại hoặc xóa volume database cũ. Sau khi nâng cấp, khởi động lại backend và tải lại frontend.
 
 ### 3. Chạy frontend
 
@@ -188,6 +198,24 @@ Không đưa `server/.env`, `node_modules` hoặc dữ liệu database cá nhân
 - Phân quyền quản lý kho và nhân viên kho.
 - Chỉ quản lý kho được duyệt phiếu.
 - Tồn kho tăng khi phiếu nhập được duyệt và giảm khi phiếu xuất được duyệt.
-- Phiếu xuất hỗ trợ FEFO, FIFO và LIFO.
+- Phiếu có từ 1 đến 100 dòng; thêm/xóa dòng trên form. Số lượng phải lớn hơn 0, tối đa 9.999.999.999,99 và tối đa 2 chữ số thập phân; kiểm tra sản phẩm tồn tại và toàn bộ phiếu trước khi lưu/duyệt.
+- Nhập bổ sung lô cũ chỉ khi cùng sản phẩm, mã lô, hạn dùng và vị trí. Cộng số lượng và giữ ngày nhập ban đầu; lô đã hết hạn hoặc thông tin không khớp sẽ bị chặn. Nhiều dòng cùng lô phải khớp thông tin và tổng tồn không vượt giới hạn. Thông tin lô được kiểm tra lại lúc duyệt.
+- Phiếu xuất hỗ trợ FEFO (hết hạn sớm trước, cùng hạn thì nhập trước), FIFO (nhập trước, xuất trước) và LIFO (nhập sau, xuất trước).
+- Hệ thống lọc lô còn hàng, chưa hết hạn trước khi sắp xếp theo chính sách. Lô có hạn dùng đúng hôm nay vẫn được xuất; ngày nghiệp vụ theo `CURDATE()` của MySQL. Phiếu chờ chưa giữ chỗ tồn; tồn và phân bổ được kiểm tra lại trong giao dịch lúc duyệt. Chi tiết hiển thị tồn khả dụng và thiếu hụt từng dòng, tính cả nhiều dòng dùng chung sản phẩm.
+- Quản lý phải mở chi tiết để có mã xác nhận nội dung/phân bổ trước khi duyệt. Từ chối bắt buộc có lý do tối đa 1.000 ký tự; lưu người xử lý và thời điểm.
+- Nút gửi/duyệt được khóa khi xử lý. Mã phiếu dùng UUID và ràng buộc duy nhất; tạo phiếu dùng `requestKey` UUID v4, duy nhất theo người lập và loại phiếu. Gửi lại cùng khóa/nội dung trả về phiếu cũ, dùng cùng khóa cho nội dung khác bị từ chối. Khóa được giữ khi thử lại form chưa thay đổi; mở form mới tạo yêu cầu mới. API tạo phiếu yêu cầu `requestKey`; API duyệt yêu cầu `reviewToken` lấy từ chi tiết, API từ chối yêu cầu `reason`.
+- Duyệt khóa phiếu và tồn kho trong giao dịch; phiếu đã duyệt/từ chối không thể cập nhật tồn lần nữa. Bất kỳ dòng nào lỗi thì hoàn tác toàn phiếu.
+- Chỉ quản lý kho được điều chỉnh lô ở chi tiết phiếu đang chờ duyệt. Nhân viên chỉ xem lô đề xuất.
+- Khi điều chỉnh, phải nhập lý do (tối đa 1.000 ký tự), chọn đúng sản phẩm và phân bổ đủ số lượng từng dòng. Không được dùng lô hết hạn, hết hàng hoặc vượt tồn, kể cả khi nhiều dòng dùng chung lô.
+- Điều chỉnh chỉ được lưu khi phê duyệt thành công, gồm người thực hiện, thời điểm, lý do, phân bổ đề xuất và phân bổ thực tế. Hủy điều chỉnh sẽ dùng lại chính sách đã chọn.
 - Không cho duyệt phiếu xuất nếu lượng tồn không đủ.
 - Trường `minimum_stock` có trong database; giao diện và xử lý cảnh báo tồn kho chưa được phát triển.
+
+## Kiểm tra luồng nhập, xuất và duyệt
+
+Trong thư mục `server`, chạy `pnpm test` để kiểm tra dữ liệu, phân bổ, quyền quản lý, lý do điều chỉnh và hoàn tác khi lỗi. Có MySQL đang chạy và đã nâng cấp cấu trúc thì chạy thêm `pnpm test:integration`:
+
+- Kiểm thử điều chỉnh lô dùng giao dịch được hoàn tác trên database đã cấu hình.
+- Kiểm thử vòng đời phiếu tạo database riêng tên `warehouse_qa_<uuid>`, dùng giao dịch thật để kiểm tra gửi trùng, duyệt đồng thời, tranh chấp tồn kho và nhập bổ sung lô; tự xóa database thử khi kết thúc. Tài khoản MySQL chạy bộ kiểm thử cần quyền tạo/xóa database thử. Không thay đổi phiếu hoặc tồn kho nghiệp vụ.
+
+Trong thư mục `client`, chạy `pnpm build` để kiểm tra bản dựng giao diện.

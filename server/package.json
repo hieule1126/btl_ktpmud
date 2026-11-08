@@ -4,7 +4,10 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/app.js",
-    "start": "node src/app.js"
+    "start": "node src/app.js",
+    "migrate": "node scripts/migrate.js",
+    "test": "node --test src/routes/warehouse.test.js src/services/document-validation.test.js",
+    "test:integration": "node --test src/routes/warehouse.mysql.test.js src/routes/documents.mysql.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
