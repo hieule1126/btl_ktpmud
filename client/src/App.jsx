@@ -1,13 +1,37 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "./api.js";
+import { cleanText } from "./text.js";
+import DocumentDetail from "./DocumentDetail.jsx";
+import DocumentForm from "./DocumentForm.jsx";
 
-const icons = { dashboard: "▦", products: "◫", batches: "▤", receipt: "↓", issue: "↑", approvals: "✓" };
+function Icon({ name, ...props }) {
+  const paths = {
+    dashboard: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
+    products: "m12 3 9 5-9 5-9-5 9-5Z M3 8v9l9 5 9-5V8 M12 13v9 M7.5 5.5l9 5",
+    batches: "M3 4h18v16H3z M3 10h18 M9 4v6 M15 10v10",
+    receipts: "M12 3v12 m-5-5 5 5 5-5 M4 16v5h16v-5",
+    issues: "M12 16V4 m-5 5 5-5 5 5 M4 16v5h16v-5",
+    approvals: "M9 3h6v4H9z M9 5H5v16h14V5h-4 M8 14l3 3 5-6",
+    arrow: "M5 12h14 m-5-5 5 5-5 5",
+    alert: "m12 3 10 18H2L12 3Z M12 9v5 M12 17h.01",
+    logout: "M9 4H4v16h5 M10 12h11 m-4-4 4 4-4 4"
+  };
+  return <svg className="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}><path d={paths[name] || paths.products} /></svg>;
+}
+
+function Brand({ login = false }) {
+  return <div className={login ? "login-logo brand" : "brand"} aria-label="KhoSmart">
+    <img className="brand-mark" src="/khosmart.svg" alt="" width="40" height="40" />
+    <span className="brand-name">Kho<span>Smart</span></span>
+  </div>;
+}
+
 const pageMeta = {
   dashboard: ["Tổng quan kho", "Theo dõi tồn kho và phiếu xử lý hôm nay"],
   products: ["Sản phẩm", "Danh mục hàng hóa đang quản lý"],
   batches: ["Lô hàng", "Theo dõi vị trí, số lượng và hạn sử dụng"],
   receipts: ["Phiếu nhập", "Tạo và theo dõi các phiếu nhập kho"],
-  issues: ["Phiếu xuất", "Xuất kho tự động theo chiến lược đã chọn"],
+  issues: ["Phiếu xuất", "Xuất kho theo FEFO/FIFO/LIFO, điều chỉnh lô có ghi lý do"],
   approvals: ["Chờ phê duyệt", "Chỉ quản lý kho có quyền phê duyệt phiếu"]
 };
 
@@ -18,6 +42,7 @@ function statusText(status) { return ({ PENDING: "Chờ duyệt", APPROVED: "Đ�
 export default function App() {
   const [session, setSession] = useState(() => JSON.parse(localStorage.getItem("warehouse_user") || "null"));
   const [page, setPage] = useState("dashboard");
+  const [selectedDocument, setSelectedDocument] = useState(null);
   const [products, setProducts] = useState([]);
   const [batches, setBatches] = useState([]);
   const [receipts, setReceipts] = useState([]);
@@ -37,35 +62,36 @@ export default function App() {
   useEffect(() => { if (session) loadData(); }, [session]);
 
   const notify = (message) => { setNotice(message); setError(""); window.setTimeout(() => setNotice(""), 3200); };
-  const signOut = () => { localStorage.removeItem("warehouse_token"); localStorage.removeItem("warehouse_user"); setSession(null); };
+  const signOut = () => { localStorage.removeItem("warehouse_token"); localStorage.removeItem("warehouse_user"); setSelectedDocument(null); setSession(null); };
   const isManager = session?.role === "WAREHOUSE_MANAGER";
   if (!session) return <Login onLogin={setSession} />;
 
-  const onApproved = async (kind, id, action = "approve") => {
-    try {
-      const path = action === "approve" ? `/warehouse/${kind}/${id}/approve` : `/warehouse/${kind}/${id}/reject`;
-      const result = await api(path, { method: "POST" });
-      notify(result.message); await loadData();
-    } catch (err) { setError(err.message); }
+  const openDocument = (kind, id) => { setError(""); setSelectedDocument({ kind, id }); };
+  const onDocumentDone = async message => {
+    notify(message);
+    await loadData();
+    setSelectedDocument(null);
   };
   const pending = [...receipts.filter(x => x.status === "PENDING").map(x => ({ ...x, kind: "receipts", type: "Nhập" })), ...issues.filter(x => x.status === "PENDING").map(x => ({ ...x, kind: "issues", type: "Xuất" }))];
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><span className="brand-mark">K</span><span>Kho<span>Flow</span></span></div>
+      <Brand />
       <div className="workspace-label">KHÔNG GIAN LÀM VIỆC</div>
-      <nav>{Object.keys(pageMeta).map(key => <button key={key} className={page === key ? "nav-item active" : "nav-item"} onClick={() => setPage(key)}><i>{icons[key === "approvals" ? "approvals" : key === "receipts" ? "receipt" : key === "issues" ? "issue" : key]}</i>{key === "dashboard" ? "Tổng quan" : pageMeta[key][0]}{key === "approvals" && pending.length > 0 && <b>{pending.length}</b>}</button>)}</nav>
-      <div className="sidebar-foot"><div className="user-avatar">{session.name.slice(0, 1)}</div><div><strong>{session.name}</strong><small>{isManager ? "Quản lý kho" : "Nhân viên kho"}</small></div><button className="logout" title="Đăng xuất" onClick={signOut}>↪</button></div>
+      <nav aria-label="Điều hướng chính">{Object.keys(pageMeta).map(key => <button key={key} title={pageMeta[key][0]} aria-current={page === key ? "page" : undefined} className={page === key ? "nav-item active" : "nav-item"} onClick={() => { setPage(key); setSelectedDocument(null); }}><Icon name={key} /><span className="nav-label">{key === "dashboard" ? "Tổng quan" : pageMeta[key][0]}</span>{key === "approvals" && pending.length > 0 && <b>{pending.length}</b>}</button>)}</nav>
+      <div className="sidebar-foot"><div className="user-avatar">{session.name.slice(0, 1)}</div><div><strong>{session.name}</strong><small>{isManager ? "Quản lý kho" : "Nhân viên kho"}</small></div><button className="logout" title="Đăng xuất" aria-label="Đăng xuất" onClick={signOut}><Icon name="logout" /></button></div>
     </aside>
     <main className="main-content">
-      <header><div><p className="eyebrow">KHO HÀNG TRUNG TÂM</p><h1>{pageMeta[page][0]}</h1><p className="subtitle">{pageMeta[page][1]}</p></div><div className="today">01 tháng 10, 2026</div></header>
+      <header><div><p className="eyebrow">KHOSMART / QUẢN LÝ KHO</p><h1>{pageMeta[page][0]}</h1><p className="subtitle">{pageMeta[page][1]}</p></div><div className="today">{new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "long", year: "numeric" }).format(new Date())}</div></header>
       {notice && <div className="toast success">✓ {notice}</div>}{error && <div className="toast error">! {error}</div>}
-      {page === "dashboard" && <Dashboard data={dashboard} pending={pending} setPage={setPage} />}
+      {selectedDocument ? <DocumentDetail key={`${selectedDocument.kind}-${selectedDocument.id}`} {...selectedDocument} isManager={isManager} onBack={() => setSelectedDocument(null)} onDone={onDocumentDone} /> : <>
+      {page === "dashboard" && <Dashboard data={dashboard} pending={pending} setPage={setPage} onOpen={openDocument} />}
       {page === "products" && <Products products={products} canEdit={isManager} reload={loadData} notify={notify} setError={setError} />}
       {page === "batches" && <Batches batches={batches} />}
-      {page === "receipts" && <Documents type="receipt" documents={receipts} products={products} reload={loadData} notify={notify} setError={setError} />}
-      {page === "issues" && <Documents type="issue" documents={issues} products={products} reload={loadData} notify={notify} setError={setError} />}
-      {page === "approvals" && <Approvals items={pending} isManager={isManager} onApproved={onApproved} />}
+      {page === "receipts" && <Documents type="receipt" documents={receipts} products={products} reload={loadData} notify={notify} setError={setError} onOpen={openDocument} />}
+      {page === "issues" && <Documents type="issue" documents={issues} products={products} reload={loadData} notify={notify} setError={setError} onOpen={openDocument} />}
+      {page === "approvals" && <Approvals items={pending} isManager={isManager} onOpen={openDocument} />}
+      </>}
     </main>
   </div>;
 }
@@ -73,14 +99,14 @@ export default function App() {
 function Login({ onLogin }) {
   const [email, setEmail] = useState("quanly@kho.local"); const [password, setPassword] = useState("123456"); const [error, setError] = useState(""); const [loading, setLoading] = useState(false);
   const submit = async e => { e.preventDefault(); setLoading(true); setError(""); try { const data = await api("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }); localStorage.setItem("warehouse_token", data.token); localStorage.setItem("warehouse_user", JSON.stringify(data.user)); onLogin(data.user); } catch (err) { setError(err.message); } finally { setLoading(false); } };
-  return <div className="login-page"><div className="login-card"><div className="login-logo"><span className="brand-mark">K</span><strong>Kho<span>Flow</span></strong></div><p>Phần mềm quản lý kho hàng</p><h1>Chào mừng trở lại</h1><form onSubmit={submit}><label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} required /></label><label>Mật khẩu<input type="password" value={password} onChange={e => setPassword(e.target.value)} required /></label>{error && <div className="form-error">{error}</div>}<button className="primary full" disabled={loading}>{loading ? "Đang đăng nhập..." : "Đăng nhập"}</button></form><small>Tài khoản mẫu đã được điền sẵn.</small></div></div>;
+  return <div className="login-page"><div className="login-card"><Brand login /><p>Phần mềm quản lý kho hàng</p><h1>Chào mừng trở lại</h1><form onSubmit={submit}><label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} required /></label><label>Mật khẩu<input type="password" value={password} onChange={e => setPassword(e.target.value)} required /></label>{error && <div className="form-error">{error}</div>}<button className="primary full" disabled={loading}>{loading ? "Đang đăng nhập..." : "Đăng nhập"}</button></form><small>Tài khoản mẫu đã được điền sẵn.</small></div></div>;
 }
 
-function Dashboard({ data, pending, setPage }) {
+function Dashboard({ data, pending, setPage, onOpen }) {
   const cards = [
-    { label: "Sản phẩm", value: data?.summary.product_count, icon: "◫", color: "blue", trend: "+4% tháng này" }, 
-    { label: "Lô hàng đang có", value: data?.summary.batch_count, icon: "▤", color: "orange", trend: "Ổn định" }, 
-    { label: "Tổng đơn vị tồn", value: data?.summary.item_count, icon: "▦", color: "green", trend: "+12% so với tuần trước" }, 
+    { label: "Sản phẩm", value: data?.summary.product_count, icon: "◫", color: "blue", trend: "Trong danh mục quản lý" },
+    { label: "Lô hàng đang có", value: data?.summary.batch_count, icon: "▤", color: "orange", trend: "Ổn định" },
+    { label: "Tổng đơn vị tồn", value: data?.summary.item_count, icon: "▦", color: "green", trend: "Số lượng tồn kho hiện tại" },
     { label: "Phiếu chờ duyệt", value: data?.summary.pending_count, icon: "✓", color: "purple", trend: "Cần xử lý ngay" }
   ];
 
@@ -112,7 +138,7 @@ function Dashboard({ data, pending, setPage }) {
         ))}
       </section>
 
-      <section className="split-section">
+      <section className="pending-section">
         <div className="panel">
           <div className="panel-head">
             <div>
@@ -127,7 +153,7 @@ function Dashboard({ data, pending, setPage }) {
                 <div className="activity" key={`${item.kind}-${item.id}`}>
                   <span className={`activity-icon ${item.kind}`}>{item.kind === "receipts" ? "↓" : "↑"}</span>
                   <div>
-                    <strong>{item.code}</strong>
+                    <button className="document-link" onClick={() => onOpen(item.kind, item.id)}>{item.code}</button>
                     <small>Phiếu {item.type.toLowerCase()} · {formatDate(item.created_at)}</small>
                   </div>
                   <span className="status pending">Chờ duyệt</span>
@@ -139,37 +165,26 @@ function Dashboard({ data, pending, setPage }) {
           )}
         </div>
 
-        <div className="panel guide">
-          <span>✦</span>
-          <h3>Chiến lược xuất kho</h3>
-          <p>Hệ thống đang tự động tối ưu hóa việc xuất hàng theo phương thức:</p>
-          <div className="strategy-tags">
-            <b>FEFO (Mặc định)</b>
-            <span style={{ fontSize: "13px", opacity: 0.8, display: "block", marginTop: "8px" }}>
-              Ưu tiên xuất trước các lô hàng có hạn sử dụng gần nhất để giảm thiểu hàng tồn quá hạn.
-            </span>
-          </div>
-        </div>
       </section>
     </>
   );
 }
 
 function Products({ products, canEdit, reload, notify, setError }) {
-  const [showForm, setShowForm] = useState(false); 
+  const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ sku: "", name: "", unit: "cái", minimumStock: 0 });
 
-  const submit = async e => { 
-    e.preventDefault(); 
-    try { 
-      const result = await api("/catalog/products", { method: "POST", body: JSON.stringify(form) }); 
-      notify(result.message); 
-      setShowForm(false); 
-      setForm({ sku: "", name: "", unit: "cái", minimumStock: 0 }); 
-      await reload(); 
-    } catch (err) { 
-      setError(err.message); 
-    } 
+  const submit = async e => {
+    e.preventDefault();
+    try {
+      const result = await api("/catalog/products", { method: "POST", body: JSON.stringify({ ...form, unit: cleanText(form.unit) }) });
+      notify(result.message);
+      setShowForm(false);
+      setForm({ sku: "", name: "", unit: "cái", minimumStock: 0 });
+      await reload();
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   return (
@@ -186,7 +201,7 @@ function Products({ products, canEdit, reload, notify, setError }) {
         <form className="inline-form" onSubmit={submit}>
           <input placeholder="Mã sản phẩm" value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })} required/>
           <input placeholder="Tên sản phẩm" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required/>
-          <input placeholder="Đơn vị" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })}/>
+          <input aria-label="Đơn vị tính" placeholder="Đơn vị tính" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })}/>
           <input type="number" min="0" placeholder="Tồn tối thiểu" value={form.minimumStock} onChange={e => setForm({ ...form, minimumStock: e.target.value })}/>
           <button className="primary">Lưu</button>
           <button type="button" className="secondary" onClick={() => setShowForm(false)}>Hủy</button>
@@ -199,7 +214,7 @@ function Products({ products, canEdit, reload, notify, setError }) {
             <tr>
               <th>Mã SP</th>
               <th>Tên sản phẩm</th>
-              <th>Đơn vị</th>
+              <th>Đơn vị tính</th>
               <th>Tồn hiện có</th>
               <th>Mức tối thiểu</th>
               <th>Trạng thái</th>
@@ -213,12 +228,12 @@ function Products({ products, canEdit, reload, notify, setError }) {
                 <tr key={p.id}>
                   <td><code>{p.sku}</code></td>
                   <td><strong>{p.name}</strong></td>
-                  <td>{p.unit}</td>
+                  <td>{cleanText(p.unit)}</td>
                   <td className="strong-number">{formatNumber(p.current_stock)}</td>
                   <td>{formatNumber(p.minimum_stock)}</td>
                   <td>
                     <span className={`status ${isLow ? "warning" : "approved"}`}>
-                      {isLow ? "Sắp hết hàng" : "Đang quản lý"}
+                      {Number(p.current_stock) === 0 ? "Hết hàng" : isLow ? "Tồn kho thấp" : "Đủ hàng"}
                     </span>
                   </td>
                 </tr>
@@ -231,23 +246,29 @@ function Products({ products, canEdit, reload, notify, setError }) {
   );
 }
 
-function Batches({ batches }) { return <section className="panel table-panel"><div className="panel-head"><div><h3>Tất cả lô hàng</h3><p>Danh sách được sắp theo hạn sử dụng gần nhất</p></div><span className="status approved">FEFO sẵn sàng</span></div><div className="table-scroll"><table><thead><tr><th>Mã lô</th><th>Sản phẩm</th><th>Vị trí</th><th>Hạn sử dụng</th><th>Ngày nhập</th><th>Số lượng</th></tr></thead><tbody>{batches.map(b => <tr key={b.id}><td><code>{b.batch_code}</code></td><td><strong>{b.product_name}</strong><small className="inline-small">{b.sku}</small></td><td><span className="location">⌘ {b.location}</span></td><td>{formatDate(b.expiry_date)}</td><td>{formatDate(b.received_at)}</td><td className="strong-number">{formatNumber(b.quantity)} {b.unit}</td></tr>)}</tbody></table></div></section>; }
+function Batches({ batches }) { return <section className="panel table-panel"><div className="panel-head"><div><h3>Tất cả lô hàng</h3><p>Danh sách được sắp theo hạn sử dụng gần nhất</p></div><span className="count-label">{batches.length} lô hàng</span></div><div className="table-scroll"><table><thead><tr><th>Mã lô</th><th>Sản phẩm</th><th>Vị trí</th><th>Hạn sử dụng</th><th>Ngày nhập</th><th>Số lượng</th></tr></thead><tbody>{batches.map(b => <tr key={b.id}><td><code>{b.batch_code}</code></td><td><strong>{b.product_name}</strong><small className="inline-small">{b.sku}</small></td><td><span className="location">{b.location}</span></td><td>{formatDate(b.expiry_date)}</td><td>{formatDate(b.received_at)}</td><td className="strong-number">{formatNumber(b.quantity)} <span className="quantity-unit">{cleanText(b.unit)}</span></td></tr>)}</tbody></table></div></section>; }
 
-function Documents({ type, documents, products, reload, notify, setError }) {
+function Documents({ type, documents, products, reload, notify, setError, onOpen }) {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ partner: "", note: "", strategy: "FEFO", productId: products[0]?.id || "", quantity: 1, batchCode: "", expiryDate: "", location: "" });
-  useEffect(() => { if (!form.productId && products[0]) setForm(value => ({ ...value, productId: products[0].id })); }, [products]);
   const isReceipt = type === "receipt";
-  const submit = async e => {
-    e.preventDefault();
-    const item = { productId: Number(form.productId), quantity: Number(form.quantity) };
-    if (isReceipt) Object.assign(item, { batchCode: form.batchCode, expiryDate: form.expiryDate, location: form.location });
-    const payload = isReceipt ? { supplier: form.partner, note: form.note, items: [item] } : { requestedBy: form.partner, note: form.note, strategy: form.strategy, items: [item] };
-    try { const result = await api(`/warehouse/${isReceipt ? "receipts" : "issues"}`, { method: "POST", body: JSON.stringify(payload) }); notify(result.message); setShowForm(false); await reload(); } catch (err) { setError(err.message); }
-  };
-  return <section className="panel table-panel"><div className="panel-head"><div><h3>{isReceipt ? "Danh sách phiếu nhập" : "Danh sách phiếu xuất"}</h3><p>{isReceipt ? "Hàng chỉ được cộng vào kho sau khi phê duyệt" : "Hàng chỉ được trừ khỏi kho sau khi phê duyệt"}</p></div><button className="primary" onClick={() => setShowForm(true)}>+ Tạo phiếu {isReceipt ? "nhập" : "xuất"}</button></div>{showForm && <form className="document-form" onSubmit={submit}><h3>{isReceipt ? "Tạo phiếu nhập kho" : "Tạo phiếu xuất kho"}</h3><div className="form-grid"><label>{isReceipt ? "Nhà cung cấp" : "Bộ phận yêu cầu"}<input value={form.partner} onChange={e => setForm({ ...form, partner: e.target.value })} required /></label><label>Sản phẩm<select value={form.productId} onChange={e => setForm({ ...form, productId: e.target.value })}>{products.map(p => <option value={p.id} key={p.id}>{p.sku} — {p.name}</option>)}</select></label><label>Số lượng<input type="number" min="1" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} required /></label>{!isReceipt && <label>Chiến lược xuất<select value={form.strategy} onChange={e => setForm({ ...form, strategy: e.target.value })}><option value="FEFO">FEFO — gần hết hạn trước</option><option value="FIFO">FIFO — nhập trước xuất trước</option><option value="LIFO">LIFO — nhập sau xuất trước</option></select></label>}{isReceipt && <><label>Mã lô<input value={form.batchCode} onChange={e => setForm({ ...form, batchCode: e.target.value })} required /></label><label>Hạn sử dụng<input type="date" value={form.expiryDate} onChange={e => setForm({ ...form, expiryDate: e.target.value })} required /></label><label>Vị trí kho<input placeholder="Ví dụ: A-01-01" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} required /></label></>}<label className="wide">Ghi chú<input value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} /></label></div><div className="form-actions"><button className="primary">Gửi phê duyệt</button><button type="button" className="secondary" onClick={() => setShowForm(false)}>Hủy</button></div></form>}<div className="table-scroll"><table><thead><tr><th>Mã phiếu</th><th>{isReceipt ? "Nhà cung cấp" : "Bộ phận yêu cầu"}</th>{!isReceipt && <th>Chiến lược</th>}<th>Người lập</th><th>Ngày tạo</th><th>Dòng hàng</th><th>Trạng thái</th></tr></thead><tbody>{documents.map(d => <tr key={d.id}><td><code>{d.code}</code></td><td>{isReceipt ? d.supplier : d.requested_by}</td>{!isReceipt && <td><span className="strategy">{d.strategy}</span></td>}<td>{d.creator_name}</td><td>{formatDate(d.created_at)}</td><td>{d.item_lines}</td><td><span className={`status ${d.status.toLowerCase()}`}>{statusText(d.status)}</span></td></tr>)}</tbody></table>{!documents.length && <Empty text="Chưa có phiếu nào." />}</div></section>;
+  return <section className="panel table-panel"><div className="panel-head"><div><h3>{isReceipt ? "Danh sách phiếu nhập" : "Danh sách phiếu xuất"}</h3><p>{isReceipt ? "Hàng chỉ được cộng vào kho sau khi phê duyệt" : "Hàng chỉ được trừ khỏi kho sau khi phê duyệt"}</p></div><button className="primary" onClick={() => setShowForm(true)}>+ Tạo phiếu {isReceipt ? "nhập" : "xuất"}</button></div>{showForm && <DocumentForm isReceipt={isReceipt} products={products} onCancel={() => setShowForm(false)} onSaved={async result => {
+    notify(result.message); setShowForm(false);
+    try { await reload(); } catch (error) { setError(error.message); }
+  }} />}<div className="table-scroll"><table><thead><tr><th>Mã phiếu</th><th>{isReceipt ? "Nhà cung cấp" : "Bộ phận yêu cầu"}</th>{!isReceipt && <th>Chính sách</th>}<th>Người lập</th><th>Ngày tạo</th><th>Dòng hàng</th><th>Trạng thái</th></tr></thead><tbody>{documents.map(d => <tr key={d.id}><td><button className="document-link" onClick={() => onOpen(isReceipt ? "receipts" : "issues", d.id)}>{d.code}</button></td><td>{isReceipt ? d.supplier : d.requested_by}</td>{!isReceipt && <td><span className="strategy">{d.strategy}</span></td>}<td>{d.creator_name}</td><td>{formatDate(d.created_at)}</td><td>{d.item_lines}</td><td><span className={`status ${d.status.toLowerCase()}`}>{statusText(d.status)}</span></td></tr>)}</tbody></table>{!documents.length && <Empty text="Chưa có phiếu nào." />}</div></section>;
 }
 
-function Approvals({ items, isManager, onApproved }) { return <section className="panel table-panel"><div className="panel-head"><div><h3>Danh sách chờ phê duyệt</h3><p>{isManager ? "Phê duyệt sẽ cập nhật tồn kho ngay lập tức" : "Bạn có thể theo dõi, nhưng không có quyền phê duyệt"}</p></div><span className="pending-count">{items.length} phiếu</span></div>{items.length ? <div className="approval-list">{items.map(item => <article className="approval-card" key={`${item.kind}-${item.id}`}><div className={`approval-type ${item.kind}`}>{item.kind === "receipts" ? "↓" : "↑"}</div><div className="approval-content"><div><span className="status pending">{item.type === "Nhập" ? "PHIẾU NHẬP" : "PHIẾU XUẤT"}</span><h3>{item.code}</h3><p>Người lập: <strong>{item.creator_name}</strong> · {formatDate(item.created_at)} · {item.item_lines} dòng hàng</p></div>{isManager && <div className="approval-actions"><button className="secondary danger" onClick={() => onApproved(item.kind, item.id, "reject")}>Từ chối</button><button className="primary" onClick={() => onApproved(item.kind, item.id)}>Phê duyệt</button></div>}</div></article>)}</div> : <Empty text="Tất cả phiếu đã được xử lý." />}</section>; }
+function Approvals({ items, isManager, onOpen }) {
+  return <section className="panel table-panel">
+    <div className="panel-head"><div><h3>Danh sách chờ phê duyệt</h3><p>{isManager ? "Bấm mã phiếu để kiểm tra các dòng hàng trước khi duyệt hoặc từ chối" : "Bấm mã phiếu để xem chi tiết; chỉ quản lý kho có quyền phê duyệt"}</p></div><span className="pending-count">{items.length} phiếu</span></div>
+    {items.length ? <div className="approval-list">{items.map(item => <article className="approval-card" key={`${item.kind}-${item.id}`}>
+      <div className={`approval-type ${item.kind}`}>{item.kind === "receipts" ? "↓" : "↑"}</div>
+      <div className="approval-content"><div>
+        <span className="status pending">{item.kind === "receipts" ? "PHIẾU NHẬP" : "PHIẾU XUẤT"}</span>
+        <h3><button className="document-link" onClick={() => onOpen(item.kind, item.id)}>{item.code}</button></h3>
+        <p>Người lập: <strong>{item.creator_name}</strong> · {formatDate(item.created_at)} · {item.item_lines} dòng hàng</p>
+      </div><button className="secondary" onClick={() => onOpen(item.kind, item.id)}>Xem chi tiết</button></div>
+    </article>)}</div> : <Empty text="Tất cả phiếu đã được xử lý." />}
+  </section>;
+}
 function Empty({ text }) { return <div className="empty"><span>□</span><p>{text}</p></div>; }
 

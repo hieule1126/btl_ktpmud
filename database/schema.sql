@@ -4,6 +4,7 @@ CREATE DATABASE IF NOT EXISTS warehouse_management
 USE warehouse_management;
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS stock_issue_adjustments;
 DROP TABLE IF EXISTS stock_issue_allocations;
 DROP TABLE IF EXISTS stock_issue_items;
 DROP TABLE IF EXISTS stock_issues;
@@ -50,6 +51,9 @@ CREATE TABLE batches (
 CREATE TABLE stock_receipts (
   id INT PRIMARY KEY AUTO_INCREMENT,
   code VARCHAR(50) NOT NULL UNIQUE,
+  request_key CHAR(36) NULL,
+  request_hash CHAR(64) NULL,
+  rejection_reason VARCHAR(1000) NULL,
   supplier VARCHAR(180),
   note TEXT,
   status ENUM('PENDING', 'APPROVED', 'REJECTED') NOT NULL DEFAULT 'PENDING',
@@ -57,6 +61,7 @@ CREATE TABLE stock_receipts (
   approved_by INT NULL,
   approved_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_receipt_request UNIQUE (created_by, request_key),
   CONSTRAINT fk_receipt_creator FOREIGN KEY (created_by) REFERENCES users(id),
   CONSTRAINT fk_receipt_approver FOREIGN KEY (approved_by) REFERENCES users(id)
 );
@@ -77,6 +82,9 @@ CREATE TABLE stock_receipt_items (
 CREATE TABLE stock_issues (
   id INT PRIMARY KEY AUTO_INCREMENT,
   code VARCHAR(50) NOT NULL UNIQUE,
+  request_key CHAR(36) NULL,
+  request_hash CHAR(64) NULL,
+  rejection_reason VARCHAR(1000) NULL,
   requested_by VARCHAR(180),
   note TEXT,
   strategy ENUM('FEFO', 'FIFO', 'LIFO') NOT NULL DEFAULT 'FEFO',
@@ -85,6 +93,7 @@ CREATE TABLE stock_issues (
   approved_by INT NULL,
   approved_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_issue_request UNIQUE (created_by, request_key),
   CONSTRAINT fk_issue_creator FOREIGN KEY (created_by) REFERENCES users(id),
   CONSTRAINT fk_issue_approver FOREIGN KEY (approved_by) REFERENCES users(id)
 );
@@ -107,6 +116,18 @@ CREATE TABLE stock_issue_allocations (
   CONSTRAINT fk_allocation_item FOREIGN KEY (issue_item_id) REFERENCES stock_issue_items(id),
   CONSTRAINT fk_allocation_batch FOREIGN KEY (batch_id) REFERENCES batches(id),
   CONSTRAINT ck_allocation_quantity CHECK (quantity > 0)
+);
+
+CREATE TABLE stock_issue_adjustments (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  issue_id INT NOT NULL UNIQUE,
+  reason VARCHAR(1000) NOT NULL,
+  adjusted_by INT NOT NULL,
+  adjusted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  suggested_allocations JSON NOT NULL,
+  selected_allocations JSON NOT NULL,
+  CONSTRAINT fk_adjustment_issue FOREIGN KEY (issue_id) REFERENCES stock_issues(id),
+  CONSTRAINT fk_adjustment_user FOREIGN KEY (adjusted_by) REFERENCES users(id)
 );
 
 -- Mật khẩu của hai tài khoản mẫu: 123456
